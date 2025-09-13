@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>La Cabane à Images — V10</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#fdf6e3; --card:#fff; --ink:#222; --muted:#777; --chip:#e9dcc8; --chipOn:#d5c4a1; }
+    body { margin:0; font-family: Arial, sans-serif; background:var(--bg); color:var(--ink); }
+    
+    /* Bandeau de chargement des données (XML) */
+    .loaderbar { background:#fff8d2; border-bottom:1px solid #e7d488; padding:10px 14px; display:none; }
+    .loaderbar strong { margin-right:8px; }
+    .loaderbar input[type="file"] { margin-left:10px; }
+    
+    /* Topbar (grille: gauche/centre/droite) */
+    header { padding:0 2.5%; }
+    .topbar { position:sticky; top:0; background:linear-gradient(0deg, rgba(253,246,227,0), var(--bg) 40%); padding-top:4px; }
+    .bar{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:8px;
+      padding:2px 8px;
+    }
+    .chips { gap:6px; margin:6px auto 6px; display:flex; flex-wrap:wrap; justify-content:center; }
+    .chip { padding:6px 10px; font-size:14px; background:var(--chip); border:none; border-radius:999px; cursor:pointer; font-weight:600; }
+    .chip:hover { transform: translateY(-1px); }
+    .chip.active { background:var(--chipOn); }
+    
+    /* Gauche : Aléatoire (ordre d'affichage) */
+    .shuffle{ justify-self:start; margin:0; display:flex; align-items:center; gap:6px; color:#333; font-size:13px; }
+    .shuffle input{ transform:scale(1.1); }
+    
+    /* Centre : Titre */
+    .brand{ justify-self:center; display:flex; align-items:baseline; gap:8px; padding:0; }
+    .brand-mark{ font-size:18px; transform:translateY(1px); }
+    .brand-title{ margin:0; font-weight:800; letter-spacing:.2px; font-size:clamp(16px, 2vw, 20px); }
+    .brand-title .thin{ font-weight:600; opacity:.9; }
+    
+    /* Droite : actions aléatoires + quota */
+    .right { justify-self:end; display:flex; align-items:center; gap:8px; color:#333; }
+    .iconbtn{
+      border:1px solid #ccc; background:#fff; border-radius:10px;
+      padding:4px 8px; cursor:pointer; font-size:13px;
+    }
+    .iconbtn:hover{ transform:translateY(-1px); }
+    .quota { display:flex; align-items:center; gap:8px; color:#333; }
+    .badge { background:#333; color:#fff; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; }
+    
+    main { max-width:95%; margin:16px auto 10px; padding:0 16px; }
+    
+    /* Grille 4 colonnes */
+    .grid { display:grid; gap:10px; grid-template-columns: repeat(4, 1fr); }
+    
+    .card {
+      background:var(--card); border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.12);
+      overflow:hidden; display:flex; flex-direction:column;
+    }
+    
+    /* Zone vignette + zone lecteur (mêmes dimensions, ratio 16:9) */
+    .thumb, .yt-slot { position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden; background:#000; cursor:pointer; }
+    .thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .yt-slot iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    
+    .play {
+      position:absolute; inset:auto auto 8px 8px; background:rgba(0,0,0,.55); color:#fff; padding:6px 10px;
+      border-radius:12px; font-weight:700; font-size:14px;
+    }
+    iframe.yt { width:100%; aspect-ratio:16/9; border:0; display:block; }
+    
+    .meta { padding:3px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--card); }
+    .title { font-size:12px; font-weight:600; line-height:1.2; }
+    
+    /* Lien discret (icône ▶️ seule) */
+    .open {
+      text-decoration:none; background:transparent; color:#555; padding:0 6px;
+      border-radius:8px; font-size:20px; line-height:1; opacity:.4;
+      transition:opacity .15s ease;
+    }
+    .open:hover{ opacity:1; }
+    
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+    
+    /* Pager */
+    .pager{
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      margin:6px 0 0; font-size:12px; color:#555;
+    }
+    .pager-btn{
+      padding:4px 8px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer;
+    }
+    .pager-btn:disabled{ opacity:.4; cursor:default; }
+    
+    /* -------- Plein écran -------- */
+    .card:fullscreen { display:block; background:#000; }
+    .card:fullscreen .yt-slot { width:100vw; height:100vh; aspect-ratio:auto; }
+    .card:fullscreen .yt-slot iframe { width:100%; height:100%; }
+    .card:fullscreen .meta { display:none; }
+    .card:-webkit-full-screen { display:block; background:#000; }
+    .card:-webkit-full-screen .yt-slot { width:100vw; height:100vh; aspect-ratio:auto; }
+    .card:-webkit-full-screen .yt-slot iframe { width:100%; height:100%; }
+    .card:-webkit-full-screen .meta { display:none; }
+    .card:-moz-full-screen { display:block; background:#000; }
+    .card:-moz-full-screen .yt-slot { width:100vw; height:100vh; aspect-ratio:auto; }
+    .card:-moz-full-screen .yt-slot iframe { width:100%; height:100%; }
+    .card:-moz-full-screen .meta { display:none; }
+    
+    /* Overlay de fin de session */
+    .end-overlay {
+      position:fixed; inset:0; background:#000c; color:#fff; display:none;
+      align-items:center; justify-content:center; text-align:center; z-index:9999;
+    }
+    .end-overlay .panel {
+      background:#111; padding:24px 28px; border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+      max-width:420px;
+    }
+    .end-overlay .panel h2 { margin:0 0 10px; font-size:20px; }
+    .end-overlay .panel p { margin:0 0 16px; color:#ddd; }
+    .end-overlay .panel button {
+      padding:10px 14px; border-radius:10px; border:1px solid #444; background:#222; color:#fff; cursor:pointer;
+    }
+    
+    /* Overlay ouverture externe (YouTube / Digiview page) */
+    .ext-overlay{
+      position:fixed; inset:0; background:#000c; color:#fff; display:none;
+      align-items:center; justify-content:center; text-align:center; z-index:9998;
+    }
+    .ext-panel{
+      background:#111; padding:18px 20px; border-radius:14px; max-width:420px;
+      box-shadow:0 8px 24px rgba(0,0,0,.4);
+    }
+    .ext-panel h2{ margin:0 0 8px; font-size:18px; }
+    .ext-panel p{ margin:0 0 12px; color:#ddd; font-size:14px; }
+    .ext-actions{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+    .ext-btn{ padding:8px 12px; border-radius:10px; border:1px solid #444; background:#222; color:#fff; cursor:pointer; }
+    .ext-link{ text-decoration:none; background:#fff; color:#000; padding:8px 12px; border-radius:10px; font-weight:700; }
+    .ext-undo{ font-size:12px; opacity:.85; }
+  </style>
+</head>
+<body>
+
+  <!-- Barre de chargement XML (s'affiche si fetch échoue en file://) -->
+  <div id="dataLoad" class="loaderbar" role="region" aria-label="Chargement des données">
+    <strong>Catalogue non chargé.</strong>
+    <span>Vous pouvez :</span>
+    <button id="tryFetch">Essayer de charger <code>videos.xml</code></button>
+    <label style="margin-left:8px;">
+      ou importer un fichier XML :
+      <input type="file" id="xmlFile" accept=".xml,application/xml" />
+    </label>
+  </div>
+
+  <header>
+    <div class="topbar">
+      <!-- Barre haute : gauche / centre / droite -->
+      <div class="bar">
+        <!-- Gauche : Aléatoire d'affichage -->
+        <label class="shuffle" for="shuffleToggle" title="Afficher les vignettes dans un ordre aléatoire">
+          <input type="checkbox" id="shuffleToggle" />
+          Aléatoire
+        </label>
+
+        <!-- Centre : Titre -->
+        <div class="brand" role="banner" aria-label="La Cabane à Images">
+          <span class="brand-mark" aria-hidden="true">🏡</span>
+          <h1 class="brand-title">La Cabane <span class="thin">à Images</span></h1>
+        </div>
+
+        <!-- Droite : Actions + Quota -->
+        <div class="right">
+          <button id="randCat" class="iconbtn" title="Lecture aléatoire — catégorie">🎲 Cat</button>
+          <button id="randAll" class="iconbtn" title="Lecture aléatoire — toute la médiathèque">🎲 Tous</button>
+          <div class="quota">Vidéos restantes : <span id="qCount" class="badge">3</span></div>
+        </div>
+      </div>
+
+      <!-- Onglets catégories -->
+      <div id="chips" class="chips" role="tablist" aria-label="Choix du dessin animé"></div>
+    </div>
+  </header>
+
+  <main>
+    <div id="grid" class="grid" aria-live="polite"></div>
+    <div id="pager" class="pager" aria-label="Navigation par 12"></div>
+  </main>
+  
+  <!-- Overlay fin de session -->
+  <div id="endOverlay" class="end-overlay" role="dialog" aria-modal="true" aria-labelledby="endTitle" aria-describedby="endText">
+    <div class="panel">
+      <h2 id="endTitle">Session terminée</h2>
+      <p id="endText">Bravo, vous avez regardé 3 vidéos. Vous pouvez fermer la page.</p>
+      <button onclick="tryCloseNow()">Fermer maintenant</button>
+    </div>
+  </div>
+
+  <!-- Overlay externe (YouTube / Digiview page) -->
+  <div id="extOverlay" class="ext-overlay" role="dialog" aria-modal="true" aria-labelledby="extTitle">
+    <div class="ext-panel">
+      <h2 id="extTitle">Lecture externe</h2>
+      <p>La vidéo s’est ouverte dans un nouvel onglet/fenêtre. Quand c’est terminé :</p>
+      <div class="ext-actions">
+        <button class="ext-btn" id="extBack">J’ai fini — Revenir</button>
+        <a class="ext-link" id="extOpen" href="#" target="_blank" rel="noopener">Ouvrir (si bloqué) ▶️</a>
+      </div>
+      <p class="ext-undo" id="extUndo"></p>
+    </div>
+  </div>
+
+  <script>
+    /* ==============================
+       API IFrame YouTube
+       ============================== */
+    (function loadYTApi(){
+      const s = document.createElement('script');
+      s.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(s);
+    })();
+    let YT_READY = false;
+    function onYouTubeIframeAPIReady(){ YT_READY = true; }
+    
+    /* ==============================
+       Quota (3 vidéos max)
+       ============================== */
+    const MAX_VIDEOS = 3;
+    let REMAINING = MAX_VIDEOS;
+    const qCount = document.getElementById('qCount');
+    const endOverlay = document.getElementById('endOverlay');
+    function updateQuotaUI(){
+      if (qCount) qCount.textContent = String(REMAINING);
+      if (REMAINING <= 0) endSession();
+    }
+    function endSession(){
+      try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch(_){}
+      tryCloseNow();
+      setTimeout(() => {
+        if (!document.hidden) {
+          endOverlay.style.display = 'flex';
+          setTimeout(() => { try { location.replace('about:blank'); } catch(_) {} }, 2000);
+        }
+      }, 300);
+    }
+    function tryCloseNow(){
+      try { window.close(); } catch(_) {}
+      try { window.open('', '_self'); window.close(); } catch(_) {}
+    }
+    
+    /* ==============================
+       Données (chargées depuis XML)
+       ============================== */
+    const PAGE_SIZE = 12; // 4 x 3
+    let DATA = {};              // { "Catégorie": [ {title, id, end?, external?, dv?, dur?}, ... ] }
+    let currentCat = null;
+    let page = 0;
+    
+    const chips = document.getElementById('chips');
+    const grid  = document.getElementById('grid');
+    const pager = document.getElementById('pager');
+    const loaderBar = document.getElementById('dataLoad');
+    const xmlInput = document.getElementById('xmlFile');
+    const tryFetchBtn = document.getElementById('tryFetch');
+    const shuffleToggle = document.getElementById('shuffleToggle');
+    const randCatBtn = document.getElementById('randCat');
+    const randAllBtn = document.getElementById('randAll');
+
+    // Mélange d'affichage (ordre) : état et index mélangés par catégorie
+    let SHUFFLE = false;
+    const SHUFFLED = new Map(); // { catName -> [indices mélangés] }
+
+    // Initialisation : essaie de charger videos.xml automatiquement (sauf en file://)
+    initCatalog();
+    if (xmlInput) xmlInput.addEventListener('change', onPickXML);
+    if (tryFetchBtn) tryFetchBtn.addEventListener('click', () => initCatalog(true));
+    if (shuffleToggle){
+      shuffleToggle.addEventListener('change', () => {
+        SHUFFLE = shuffleToggle.checked;
+        page = 0;
+        if (!SHUFFLE) {
+          SHUFFLED.clear();
+        } else {
+          buildShuffleFor(currentCat);
+        }
+        renderCategory(currentCat);
+      });
+    }
+    if (randCatBtn){
+      randCatBtn.addEventListener('click', () => {
+        if (REMAINING <= 0) { endSession(); return; }
+        if (!currentCat) return;
+        const list = getOrderedList(currentCat);
+        if (!list.length) return;
+        const it = list[Math.floor(Math.random() * list.length)];
+        playByCategoryAndId(currentCat, it.id, it);
+      });
+    }
+    if (randAllBtn){
+      randAllBtn.addEventListener('click', () => {
+        if (REMAINING <= 0) { endSession(); return; }
+        const cats = Object.keys(DATA);
+        const pool = [];
+        cats.forEach(cat => {
+          getOrderedList(cat).forEach(v => pool.push({cat, item:v}));
+        });
+        if (!pool.length) return;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        playByCategoryAndId(pick.cat, pick.item.id, pick.item);
+      });
+    }
+
+    /**
+     * Tente de charger "videos.xml" via fetch (nécessite http/https).
+     * En file://, on n'essaie pas (évite l'erreur CORS) → barre d'import.
+     */
+    async function initCatalog(showBarOnErr){
+      const isFile = location.protocol === 'file:';
+      if (isFile) {
+        if (loaderBar) loaderBar.style.display = 'block';
+        return;
+      }
+      try {
+        const resp = await fetch('videos.xml', { cache:'no-store' });
+        if (!resp.ok) throw new Error('HTTP '+resp.status);
+        const text = await resp.text();
+        const xml = new DOMParser().parseFromString(text, 'application/xml');
+        DATA = xmlToData(xml);
+        SHUFFLED.clear(); // le catalogue a peut-être changé
+        afterDataReady();
+        if (loaderBar) loaderBar.style.display = 'none';
+      } catch (e) {
+        if (loaderBar && showBarOnErr !== false) loaderBar.style.display = 'block';
+      }
+    }
+
+    /** Import manuel (fonctionne en file://) */
+    function onPickXML(ev){
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const xml = new DOMParser().parseFromString(reader.result, 'application/xml');
+          DATA = xmlToData(xml);
+          SHUFFLED.clear();
+          afterDataReady();
+          if (loaderBar) loaderBar.style.display = 'none';
+        } catch (err){
+          alert("Impossible de lire le fichier XML.");
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    /** Parse XML → DATA */
+    function xmlToData(xml){
+      const out = {};
+      const cats = xml.querySelectorAll('catalog > category');
+      cats.forEach(cat => {
+        const name = cat.getAttribute('name') || 'Sans titre';
+        const vids = [];
+        cat.querySelectorAll('video').forEach(v => {
+          const idAttr = v.getAttribute('id') || '';
+          const titleAttr = v.getAttribute('title');
+          const titleNode = v.querySelector('title');
+          const endNode = v.querySelector('end');
+          const extAttr = v.getAttribute('external');
+          const dvAttr  = v.getAttribute('dv');
+          const durAttr = v.getAttribute('dur');
+          const durNode = v.querySelector('dur');
+          const item = {
+            id: idAttr.trim(),
+            title: (titleAttr || (titleNode ? titleNode.textContent : '') || '').trim()
+          };
+          if (endNode && endNode.textContent) {
+            const endVal = parseInt(endNode.textContent.trim(), 10);
+            if (!Number.isNaN(endVal)) item.end = endVal;
+          }
+          if (extAttr && extAttr.toLowerCase() === 'true') item.external = true;
+          if (dvAttr) item.dv = dvAttr.trim();
+          const d = durAttr || (durNode ? durNode.textContent : '');
+          if (d) {
+            const dv = parseInt(String(d).trim(), 10);
+            if (!Number.isNaN(dv)) item.dur = dv;
+          }
+          if (item.id && item.title) vids.push(item);
+        });
+        out[name] = vids;
+      });
+      return out;
+    }
+
+    /** Après chargement : construit les onglets, affiche 1ère catégorie */
+    function afterDataReady(){
+      chips.innerHTML = '';
+      const CATS = Object.keys(DATA);
+      if (CATS.length === 0) {
+        grid.innerHTML = '<p>Aucune catégorie dans le XML.</p>';
+        return;
+      }
+      CATS.forEach((name, i) => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (i===0 ? ' active' : '');
+        b.setAttribute('role','tab');
+        b.textContent = name;
+        b.onclick = () => selectCategory(name, b);
+        chips.appendChild(b);
+      });
+      selectCategory(CATS[0], chips.querySelector('.chip'));
+      updateQuotaUI();
+    }
+
+    /* --------- Utilitaires d'ordre/mélange --------- */
+    function buildShuffleFor(cat){
+      if (!cat) return;
+      const base = (DATA[cat] || []).filter(v => v.id && v.title);
+      const idx = base.map((_, i) => i);
+      for (let i = idx.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [idx[i], idx[j]] = [idx[j], idx[i]];
+      }
+      SHUFFLED.set(cat, idx);
+    }
+    function getOrderedList(cat){
+      const base = (DATA[cat] || []).filter(v => v.id && v.title);
+      if (!SHUFFLE) return base;
+      let idx = SHUFFLED.get(cat);
+      if (!idx || idx.length !== base.length) { buildShuffleFor(cat); idx = SHUFFLED.get(cat); }
+      return idx.map(i => base[i]);
+    }
+
+    /* --------- Navigation vers un item et lecture --------- */
+    function playByCategoryAndId(cat, id, itemMaybe){
+      const list = getOrderedList(cat);
+      const pos = list.findIndex(v => v.id === id);
+      if (pos < 0) return;
+      const item = itemMaybe || list[pos];
+
+      // Choix du mode
+      if (item.dv && item.dur) { // Digiview plein écran + auto-exit
+        const btn = Array.from(chips.querySelectorAll('.chip')).find(b => b.textContent === cat);
+        if (btn) selectCategory(cat, btn); else { currentCat = cat; }
+        page = Math.floor(pos / PAGE_SIZE);
+        renderCategory(cat);
+        setTimeout(() => {
+          const card = grid.querySelector(`.card[data-id="${id}"]`);
+          const th = card && card.querySelector('.thumb');
+          if (th) th.click();
+        }, 30);
+        return;
+      }
+      if (item.external || (item.dv && !item.dur)) { // externe (YouTube ou Digiview page)
+        openExternalURL(item.dv ? item.dv : `https://www.youtube.com/watch?v=${item.id}`);
+        return;
+      }
+      // Intégration YouTube classique
+      const btn = Array.from(chips.querySelectorAll('.chip')).find(b => b.textContent === cat);
+      if (btn) selectCategory(cat, btn); else { currentCat = cat; }
+      page = Math.floor(pos / PAGE_SIZE);
+      renderCategory(cat);
+      setTimeout(() => {
+        const card = grid.querySelector(`.card[data-id="${id}"]`);
+        const th = card && card.querySelector('.thumb');
+        if (th) th.click();
+      }, 30);
+    }
+
+    /* ==============================
+       Sélection de catégorie
+       ============================== */
+    function selectCategory(name, btn){
+      currentCat = name;
+      page = 0;
+      chips.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      if (SHUFFLE && !SHUFFLED.has(name)) buildShuffleFor(name);
+      renderCategory(name);
+    }
+    
+    /* ==============================
+       Rendu de la grille (4x3) avec ordre selon le toggle
+       ============================== */
+    function renderCategory(name){
+      grid.innerHTML = '';
+      const all = getOrderedList(name);
+      const start = page * PAGE_SIZE;
+      const slice = all.slice(start, start + PAGE_SIZE);
+      slice.forEach(item => grid.appendChild(makeCard(item)));
+      renderPager(all.length);
+    }
+    
+    /* ==============================
+       Construction d'une "carte" vidéo
+       ============================== */
+    function makeCard(item){
+      const id = item.id;
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.dataset.id = id;
+      
+      const thumb = buildThumb();
+      el.appendChild(thumb);
+      
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const t = document.createElement('div');
+      t.className = 'title';
+      t.textContent = item.title;
+      const a = document.createElement('a');
+      a.className = 'open';
+      a.textContent = '▶️';
+      a.title = 'Ouvrir sur YouTube';
+      a.setAttribute('aria-label','Ouvrir sur YouTube');
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.href = `https://www.youtube.com/watch?v=${id}`;
+      meta.append(t, a);
+      el.appendChild(meta);
+      
+      return el;
+      
+      function buildThumb(){
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+        const img = document.createElement('img');
+        img.alt = item.title;
+        img.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+        const play = document.createElement('div');
+        play.className = 'play';
+        play.textContent = '▶️ Lire';
+        thumb.append(img, play);
+    
+        thumb.onclick = () => {
+          // 1) Digiview en plein écran + auto-exit (si 'dur' renseigné)
+          if (item.dv && item.dur) {
+            if (REMAINING <= 0) { endSession(); return; }
+            const slot = document.createElement('div');
+            slot.className = 'yt-slot';
+            const iframe = document.createElement('iframe');
+            iframe.allowFullscreen = true;
+            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+            iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+            const glue = item.dv.includes('?') ? '&' : '?';
+            iframe.src = `${item.dv}${glue}autoplay=1`;
+            slot.appendChild(iframe);
+            thumb.replaceWith(slot);
+            // Plein écran
+            safeFullscreen(el);
+            // Auto-exit sur timer (durée + 2s marge)
+            const ms = Math.max(1, (item.dur|0) + 2) * 1000;
+            setTimeout(() => {
+              try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch(_){}
+              setTimeout(() => {
+                slot.replaceWith(buildThumb());
+                REMAINING = Math.max(0, REMAINING - 1);
+                updateQuotaUI();
+              }, 60);
+            }, ms);
+            return;
+          }
+    
+          // 2) Externe (Digiview page ou YouTube) avec annulation 10 s
+          if (item.external || (item.dv && !item.dur)) {
+            openExternalURL(item.dv ? item.dv : `https://www.youtube.com/watch?v=${id}`);
+            return;
+          }
+    
+          // 3) YouTube intégré (API)
+          if (REMAINING <= 0) { endSession(); return; }
+          const slot = document.createElement('div');
+          slot.className = 'yt-slot';
+          const slotId = 'yt-' + Math.random().toString(36).slice(2);
+          slot.id = slotId;
+          thumb.replaceWith(slot);
+    
+          if (window.YT && typeof YT.Player === 'function' && YT_READY) {
+            const player = new YT.Player(slotId, {
+              host: 'https://www.youtube-nocookie.com',
+              videoId: id,
+              playerVars: { autoplay: 1, rel: 0, modestbranding: 1, iv_load_policy: 3, playsinline: 1, ...(item.end?{end:item.end}:{}) },
+              events: {
+                onReady: e => {
+                  try { e.target.playVideo(); } catch(_) {}
+                  waitForPlay(e.target, 1500).then(() => {
+                    safeFullscreen(el);
+                  }).catch(() => {
+                    try { e.target.mute(); e.target.playVideo(); } catch(_) {}
+                    waitForPlay(e.target, 1500).then(() => {
+                      safeFullscreen(el);
+                      setTimeout(() => { try { e.target.unMute(); } catch(_){} }, 300);
+                    }).catch(()=>{});
+                  });
+                },
+                onStateChange: e => {
+                  if (e.data === YT.PlayerState.ENDED) {
+                    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+                    setTimeout(() => {
+                      player.destroy();
+                      slot.replaceWith(buildThumb());
+                      REMAINING = Math.max(0, REMAINING - 1);
+                      updateQuotaUI();
+                    }, 50);
+                  }
+                },
+                onError: e => {
+                  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch(_){}
+                  try { player.destroy(); } catch(_){}
+                  slot.replaceWith(buildThumb());
+                  if (item.dv) openExternalURL(item.dv);
+                  else openExternalURL(`https://www.youtube.com/watch?v=${id}`);
+                }
+              }
+            });
+          } else {
+            const iframe = document.createElement('iframe');
+            iframe.allowFullscreen = true;
+            iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
+            iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+            const endParam = item.end ? `&end=${encodeURIComponent(item.end)}` : '';
+            iframe.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3${endParam}`;
+            slot.appendChild(iframe);
+            setTimeout(()=>safeFullscreen(el), 120);
+          }
+        };
+        return thumb;
+      }
+    }
+    
+    /* ==============================
+       Attendre la lecture effective (YouTube API)
+       ============================== */
+    function waitForPlay(player, timeoutMs){
+      return new Promise((resolve, reject) => {
+        const deadline = Date.now() + (timeoutMs || 1500);
+        const tick = () => {
+          try {
+            const st = player.getPlayerState && player.getPlayerState();
+            const t  = player.getCurrentTime && player.getCurrentTime();
+            if (st === 1 && t > 0.05) return resolve();
+          } catch(_){}
+          if (Date.now() > deadline) return reject();
+          setTimeout(tick, 60);
+        };
+        tick();
+      });
+    }
+    
+    /* ==============================
+      Plein écran "safe"
+      ============================== */
+    function safeFullscreen(el){
+      try {
+        if (!el || !el.isConnected) return;
+        const p = (el.requestFullscreen && el.requestFullscreen())
+               || (el.webkitRequestFullscreen && el.webkitRequestFullscreen())
+               || (el.mozRequestFullScreen && el.mozRequestFullScreen())
+               || (el.msRequestFullscreen && el.msRequestFullscreen());
+        if (p && typeof p.then === 'function') p.catch(()=>{});
+      } catch (_) { /* on ignore */ }
+    }
+    
+    /* ==============================
+       Pagination
+       ============================== */
+    function renderPager(total){
+      if (!pager) return;
+      pager.innerHTML = '';
+      const prev = mkBtn('◀', page > 0, () => { page--; renderCategory(currentCat); });
+      const info = document.createElement('span');
+      const from = total === 0 ? 0 : (page*PAGE_SIZE + 1);
+      const to   = Math.min(total, (page+1)*PAGE_SIZE);
+      info.textContent = `${from}–${to} / ${total}`;
+      const next = mkBtn('▶', (page+1)*PAGE_SIZE < total, () => { page++; renderCategory(currentCat); });
+      pager.append(prev, info, next);
+    }
+    function mkBtn(txt, enabled, onClick){
+      const b = document.createElement('button');
+      b.className = 'pager-btn'; b.textContent = txt; b.disabled = !enabled;
+      if (enabled) b.onclick = onClick;
+      return b;
+    }
+
+    /* ==============================
+       Ouverture externe (YouTube / Digiview page) + décompte immédiat (annulable 10 s)
+       ============================== */
+    let EXTERNAL_WIN = null;
+    let EXTERNAL_WATCH = null;
+    let EXTERNAL_UNDO_TIMER = null;
+    function showExtOverlay(url){
+      const ov = document.getElementById('extOverlay');
+      const a  = document.getElementById('extOpen');
+      const back = document.getElementById('extBack');
+      const undoLbl = document.getElementById('extUndo');
+      if (!ov) return;
+      a.href = url;
+      ov.style.display = 'flex';
+      back.onclick = () => { closeExternalAndReturn(); };
+      // Annulation : 10 s avec Échap
+      let left = 10;
+      undoLbl.textContent = `Annuler le décompte (encore ${left}s) : appuyez Échap.`;
+      const tick = setInterval(() => {
+        left--;
+        if (left <= 0){
+          clearInterval(tick);
+          undoLbl.textContent = '';
+        } else {
+          undoLbl.textContent = `Annuler le décompte (encore ${left}s) : appuyez Échap.`;
+        }
+      }, 1000);
+      const onKey = (e) => {
+        if (e.key === 'Escape' && EXTERNAL_UNDO_TIMER){
+          e.preventDefault();
+          undoExternalCount();
+        }
+      };
+      document.addEventListener('keydown', onKey, { once:true });
+    }
+    function hideExtOverlay(){
+      const ov = document.getElementById('extOverlay');
+      if (ov) ov.style.display = 'none';
+    }
+    function closeExternalAndReturn(){
+      try { if (EXTERNAL_WIN && !EXTERNAL_WIN.closed) EXTERNAL_WIN.close(); } catch(_){}
+      hideExtOverlay();
+      if (EXTERNAL_WATCH){ clearInterval(EXTERNAL_WATCH); EXTERNAL_WATCH = null; }
+      EXTERNAL_WIN = null;
+    }
+    function undoExternalCount(){
+      if (!EXTERNAL_UNDO_TIMER) return;
+      clearTimeout(EXTERNAL_UNDO_TIMER);
+      EXTERNAL_UNDO_TIMER = null;
+      REMAINING = Math.min(MAX_VIDEOS, REMAINING + 1);
+      updateQuotaUI();
+      hideExtOverlay();
+    }
+    function openExternalURL(url){
+      if (REMAINING <= 0) { endSession(); return; }
+      // Décompte immédiat + timer d'annulation 10s
+      REMAINING = Math.max(0, REMAINING - 1);
+      updateQuotaUI();
+      if (EXTERNAL_UNDO_TIMER) clearTimeout(EXTERNAL_UNDO_TIMER);
+      EXTERNAL_UNDO_TIMER = setTimeout(() => { EXTERNAL_UNDO_TIMER = null; }, 10000);
+      // Ouverture fenêtre/onglet
+      let w = null;
+      try { w = window.open(url, '_blank', 'noopener,noreferrer,resizable,scrollbars'); } catch(_){}
+      EXTERNAL_WIN = w || null;
+      // Overlay d'aide
+      showExtOverlay(url);
+      // Surveiller la fermeture si c'était une popup
+      if (EXTERNAL_WATCH) clearInterval(EXTERNAL_WATCH);
+      EXTERNAL_WATCH = setInterval(() => {
+        if (!EXTERNAL_WIN || EXTERNAL_WIN.closed){
+          clearInterval(EXTERNAL_WATCH); EXTERNAL_WATCH = null;
+          hideExtOverlay();
+          EXTERNAL_WIN = null;
+        }
+      }, 800);
+    }
+  </script>
+</body>
+</html>
